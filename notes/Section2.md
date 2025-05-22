@@ -13,6 +13,7 @@
 ### API Management
 * Frontend platform for managing security, running analysis, and monitoring your APIs. Also allows the creation, change, and removal of APIs.
 ### Azure Container Services
+* Also known as Azure Kubernetes Service, orchestrates and manages everything for your hosted containers. Scalability, Load balancing, server placement, etc.
 
 ## Networking - Connectivity
 ### Virtual Network (VNet)
