@@ -100,13 +100,79 @@ Watch-outs:
 
 ## Networking - Delivery
 ### CDN
+* What it is – Edge caching for static or “mostly-static” objects (images, scripts, video segments, large downloads). Azure runs several flavors (Standard “Microsoft” POPs, plus Akamai & Verizon). The legacy Edgio tier is being shut down 15 Jan 2025—migrate now or your endpoints go dark. 
+* When to use it – You need lower latency on global reads, thinner egress bills, or a shield in front of an origin that can’t take a Reddit hug-of-death.
+* Gotchas –
+- Purely HTTP(S) cache; no smart load-balancing logic.
+- Refresh is TTL-driven—purge APIs exist, but batch purges can lag minutes.
+- Still bills per-GB egress from POP to user and from origin to POP; big files can surprise you.
 ### Azure Front Door
+* What it is – Microsoft’s next-gen global HTTP(S) edge: combines anycast routing, SSL offload, path-based routing, built-in WAF, and tiered caching (Standard vs Premium). Think “CDN + L7 load balancer + firewall, managed as code.” Upgrade/downgrade between tiers is now point-and-click (released H2 2024). 
+* When to use it –
+- Multi-region active-active apps that need instant failover.
+- You want a single TLS cert + vanity domain at the edge.
+- Central place for rate-limiting, geo-blocking, bot logic.
+* Gotchas –
+- Only speaks HTTP(S); for TCP/UDP you still need Load Balancer.
+- Session affinity (cookie-based) lives at the edge—not in your VNet—test sticky workflows.
+- WAF false positives are still a thing; stage in “Detection” before flipping to “Prevention.”
 ### Traffic Manager
+* What it is – DNS-level load balancer. It hands out different IP/hostname answers based on health probes, geography, latency, or weighted splits. No inline data path—once DNS resolves, the client hits the endpoint directly. 
+* When to use it –
+- Cross-cloud or hybrid failover (it’ll route to any reachable public endpoint, not just Azure).
+- Lightweight A/B or blue-green cuts without juggling certificates.
+* Gotchas –
+- Failover speed = DNS TTL (minimum 0-10 sec, but most apps cache 20-30 sec).
+- Zero TLS offload, zero WAF; it’s steering only.
+- Health probes run from inside Azure regions—if the public Internet between a region and users dies, TM won’t see it.
 ### Application Gateway
+* What it is – Regional Layer-7 load balancer that lives inside your VNet. Gives you path-based routing, cookie/session affinity, URL & header rewrite, autoscaling, zone-redundancy, and an optional integrated WAF. 
+* When to use it –
+- You need policy decisions on private IP back-ends (AKS, VMs) that never see the public edge.
+- Internal microservice meshes that want TLS end-to-end but still need header rewrites.
+* Gotchas –
+- Single-region scope—global failover demands Front Door or Traffic Manager on top.
+- Cold-start spin-up is minutes, not seconds—plan min-instance autoscale for spikes.
+- Throughput is fine for web traffic but not a drop-in for raw TCP.
 ### Load Balancer
-
+* What it is – Layer-4 (TCP/UDP) distribution for any protocol: public IP (internet-facing) or internal. Supports cross-zone redundancy, outbound SNAT, and HA Ports mode (one rule for all ports). Latest builds add better diagnostics and per-rule metrics. 
+* When to use it –
+- Classic three-tier apps: VIP on port 443, spray to web VMs.
+- Anything non-HTTP(S) (MQTT, gRPC over TCP, game servers).
+- Outbound SNAT for VMs that don’t need inbound public IPs.
+* Gotchas –
+- No TLS offload, no rules above L4—pair with NGINX/Envoy/App GW if you need them.
+- Standard SKU is zonal & secure by default but charges for inbound+outbound data; Basic is free data but lacks SLA and diagnostics.
+- State-sync traffic isn’t masked; design for sticky flows if your protocol hates re-ordering.
 ## Networking - Monitoring
 ### Network Watcher
+* What it is – The umbrella service that hosts every network-troubleshooting gadget Azure gives you: topology maps, connection monitor, next-hop, IP flow verify, packet capture, flow logs, and more. It’s enabled per region; if you spin up a VNet in “East US” without a watcher, some diagnostics simply won’t exist. 
+* Why you use it
+- One click (or ARM/Bicep) to turn on diagnostics for all VNets in the region.
+- Central spot for Connection Monitor, which now supports hybrid endpoints and custom alert rules (Build 2025 update). 
+- Houses the agent/extension needed for on-demand packet capture and advanced tests (latest agent version 1.4.3614.3; keep it current or captures fail). 
+* Gotchas
+- Regional scope—forget to enable it in one region and you’ll be blind there.
+- Generates lots of logs; pipe them to a Log Analytics workspace with a retention policy or eat storage bills later.
 ### Metrics and Logs
+* What they are –
+- Metrics = real-time numeric counters (pps, Bps, dropped packets) stored in the high-performance Azure Monitor metrics database.
+- Logs = time-series JSON groks stored in a Log Analytics workspace—flow logs, connection_monitor events, NSG/VNet flow logs, etc.
+* Why you use them
+- Alerting: fire on thresholds (e.g., >80 % LB SNAT ports used) or log queries (e.g., sudden spike of denied flows).
+- Traffic Analytics: turnkey workbook that digests flow logs into top-talkers, geos, and abnormal patterns.
+- VNet Flow Logs: the NSG flow-log replacement GA since 2024, broader visibility and will be required after 30 June 2025 when new NSG logs are blocked. 
+* Gotchas
+- Metrics keep only 93 days (unless you manually archive); Logs default to 30 days—set retention explicitly.
+- Log ingestion is billed per-GB plus per-GB retention after the free first month—large flow-log volumes can dwarf VM costs.
+- DNS & Firewall logs are still in separate schemas—queries get messy fast.
 ### Packet Capture
-
+* What it is – Remote, “agent-assisted tcpdump.” You set filters (IP, port, bytes), start capture from the portal/CLI/REST, data is streamed to a storage account or temp disk. Works on Windows or Linux VMs that have the Network Watcher extension. 
+* Why you use it
+- Debug he-said/she-said latency issues without SSH/RDP onto the box.
+- Verify TLS handshakes or weird MTU drops while traffic is live.
+* Gotchas
+- Not real-time—there’s a lag between “Start” click and actual capture start while the extension spins up.
+- Captures stop at 5 GB or 180 minutes by default; long-running traces need explicit size/time bumps.
+- Eats VM CPU; on busy boxes you will feel it—run during off-peak or capture on a clone.
+- Still VM-only. Want switch-level sniffing? You’re out of luck.
