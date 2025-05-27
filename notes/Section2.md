@@ -3,6 +3,51 @@
 
 
 # Learn
+
+## Data Services
+### Azure SQL Database
+* What it is A fully managed SQL Server engine as a service—no OS, no patching, built-in HA across three replicas. Hyperscale goes to 100 TB, serverless auto-pauses to zero vCores when idle. Microsoft just bumped Hyperscale log-throughput from 100 → 150 MiB/s (May 2025) for Gen 5 Premium-series hardware. 
+* Sweet spot Cloud-born apps that want “set it and forget it” plus features on day-one (automatic tuning, Ledger, built-in Threat Detection).
+* Gotchas
+- Per-DB pricing—200 micro-databases get pricey fast.
+- No SQL Agent jobs; use Elastic Jobs or Logic Apps instead.
+- Cross-database queries only via elastic query or external tables—design accordingly.
+### Azure SQL Managed Instance
+* What it is SQL Server engine running in a managed cluster but with the full “instance” surface area—SQL Agent, CLR, Service Broker, DB Mail, linked servers, etc. The new Managed Instance Link feature gives near-real-time replication from on-prem SQL Server to MI for hybrid DR or phased migrations. 
+* Sweet spot Lift-and-shift of legacy apps (third-party ERP, anything that needs cross-DB queries or SQL Agent) without babysitting a Windows VM.
+* Gotchas
+- Subnet must be /27 or larger and locked to a single region—changing it later is painful.
+- Storage caps at 16 TB per instance (vs 100 TB in Hyperscale).
+- Public endpoint is disabled by default; some ISVs choke if they can’t call back in—test early.
+### SQL Server on a VM
+* What it is Exactly what it sounds like—full Windows or Linux VM with SQL Server installed, you patch everything. In return you get every obscure feature, plus free Extended Security Updates once the product hits end-of-support, as long as it’s running inside Azure. 
+* Sweet spot When the DBA says “we NEED XP_CMDSHELL / PolyBase / FILESTREAM / cross-OS drivers” or unsupported third-party agents.
+* Gotchas
+- You own HA/DR—always-on AGs or Failover Cluster Instances, which means extra VMs and managed disks.
+- Storage throughput tied to VM size and premium disk choices; many first-time lift-and-shifts under-provision IOPS and blame Azure.
+- License costs are real unless you bring your own SA/Software-Assurance or switch to PAYG.
+### Cosmos DB
+* What it is Globally distributed, multi-model NoSQL database with single-digit-ms reads and five consistency levels. Now shipping vector search, fuzzy + multi-language full-text search, and filtered DiskANN (Build 2025). 
+* Sweet spot Planet-scale OLTP, IoT telemetry, real-time personalization, or anything that needs active-active writes across regions.
+* Gotchas
+- You pay by provisioned RU/s or burst; under-estimate and your app throttles, over-estimate and Finance screams.
+- SQL-like query == item scans without the right composite indexes—costs spike invisibly.
+- Still eventually consistent metadata on partition splits—design for it.
+### Synapse Analytics
+* What it is A unified analytics platform: MPP data warehouse (Synapse SQL), Spark pools, data integration pipelines, and – as of 2025 – tight Fabric integration plus a migration assistant to move workloads into Fabric DW. 
+* Sweet spot Enterprise-scale star/snowflake models, petabyte fact tables, mixed T-SQL + Spark notebooks in one workspace.
+* Gotchas
+- You still pick a DWU size and pause/resume manually (or script it) to save cash—forget and the meter keeps running.
+- Synapse Serverless SQL is pay-per-TB scanned; sloppy “SELECT * FROM parquet” queries = surprise bill.
+- Fabric is the strategic future; expect Synapse SQL Dedicated to play second fiddle over time.
+### PostgreSQL Flexible Server
+* What it is Managed Postgres with choice of major versions, zone-redundant HA, and the newer elastic clusters (Citus) preview for distributed tables. Vertical scale is push-button; storage to 16 TB, IOPS to 80 K. Autoscale IOPS and burst compute landed in early 2025. 
+* Sweet spot Cloud-native Postgres apps that occasionally need HA or read replicas but not the yak-shaving of patroni or repmgr.
+* Gotchas
+- Only one writable replica—even with Citus preview; true multi-master still DIY.
+- Superuser is blocked; some extensions (e.g., pg_partman install script) need work-arounds.
+- Maintenance windows are per-region; if Friday night is mission-critical, change the default.
+
 ## Microservices
 ### Service Fabric
 * Azure Service Fabric is a Distributed Systems platform designed to simplify the packaging, deployment, and management of scalable and reliable microservices and containers. It focuses on building stateful services, which maintain their state across sessions, unlike stateless services that do not retain information between requests.
